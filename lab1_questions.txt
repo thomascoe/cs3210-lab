@@ -1,0 +1,86 @@
+Exercise 3 Questions:
+At what point does the processor start executing 32-bit code? What exactly causes the switch from 16- to 32-bit mode?
+[   0:7c2d] => 0x7c2d:  ljmp   $0x8,$0x7c32
+    This is when the processor jumps into a 32-bit code segment, switching it to 32-bit mode. Line 55 in boot.S
+What is the last instruction of the boot loader executed, and what is the first instruction of the kernel it just loaded?
+    The last instruction of the boot loader is a call instruction, calling the first instruction of the kernel
+    last boot loader instruction: => 0x7d61:    call   *0x10018
+    first kernel instruction: => 0x10000c:  movw   $0x1234,0x472
+Where is the first instruction of the kernel?
+    The first instruction of the kernel is loaded into memory at 0x10000c
+How does the boot loader decide how many sectors it must read in order to fetch the entire kernel from disk? Where does it find this information?
+    The information is found in the ELF header it reads from the disk
+
+Exercise 6 Questions:
+Reset the machine (exit QEMU/GDB and start them again). Examine the 8 words of memory at 0x00100000 at the point the BIOS enters the boot loader, and then again at the point the boot loader enters the kernel. Why are they different? What is there at the second breakpoint? (You do not really need to use QEMU to answer this question. Just think.)
+    When the BIOS enters the bootloader there is nothing in memory at 0x100000. The bootloader then loads the kernel in memory at 0x100000 because that is the the load address of the .text section in the kernel's ELF header.
+
+Exercise 7 Questions:
+What is the first instruction after the new mapping is established that would fail to work properly if the mapping weren’t in place?
+    The instruction immediately after this one will fail:
+    jmp    *%eax
+    This is the instruction in line 68 of kern/entry.S which jumps to a new address above KERNBASE. After jumping to this address, trying to execute the next instruction here (which will be 0x0 because the memory is uninitialized) will fail due to this memory address being outside of the usable RAM space
+
+Exercise 8 Questions:
+1. Explain the interface between kern/printf.c and kern/console.c. Specifically, what function does kern/console.c export? How is this function used by kern/printf.c?
+    void cputchar(int c) is provided by kern/console.c, it prints a character to the serial port and display. It is used by kern/printf.c in the putch function. It is what gives printf.c access to actually print to the display and console.
+2. Explain the following from kern/console.c:
+ if (crt_pos >= CRT_SIZE) {
+   int i;
+   memcpy(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
+   for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)
+     crt_buf[i] = 0x0700 | ' ';
+   crt_pos -= CRT_COLS;
+ }
+    This code detects when the cursor position on the monitor exceeds the visible display size, and moves the data in the crt_buf one row up, to make room for the next row of characters being written to the screen.
+3a. In the call to cprintf(), to what does fmt point? To what does ap point?
+    fmt points to the format string provided in the call
+    ap points to the location where the remaining arguments to cprintf() are stored
+3b. List (in order of execution) each call to cons_putc, va_arg, and vcprintf. For cons_putc, list its argument as well. For va_arg, list what ap points to before and after the call. For vcprintf list the values of its two arguments.
+    vcprintf(fmt=0xf0101ab2 "x %d, y %x, z %d\n", ap=0xf010ffe4 "\001");
+    cons_putc(`x`);
+    cons_putc(` `);
+    va_arg(); (ap before = 0xf010ffe4, after = 0xf010ffe8)
+    cons_putc(`1`);
+    cons_putc(`,`);
+    cons_putc(` `);
+    cons_putc(`y`);
+    cons_putc(` `);
+    va_arg(); (ap before = 0xf010ffe8, after = 0xf010ffec)
+    cons_putc(`3`);
+    cons_putc(`,`);
+    cons_putc(` `);
+    cons_putc(`z`);
+    cons_putc(` `);
+    va_arg(); (ap before = 0xf010ffec, after = 0xf010fff0)
+    cons_putc(`4`);
+    cons_putc(`\n`);
+4. This code outputs "He11o World". If x86 were big-endian, it would have to be set to 0x726c6400 in order to produce the same output. 57616 would not need to change, because this decimal number would still have the value e110 when represented in hexadecimal
+5. The value that will be printed will be the next 4 bytes of whatever was on the stack. This happens because va_arg() will be called an additional time after exhausting all of the arguments passed, without knowing this has happened since it has no way to know the number of arguments given.
+6. You would have to move the format string to the last argument, so that it would be in a known location to read.
+
+Exercise 9 Questions:
+1. How does the kernel reserve space for its stack?
+    The space is reserved in the kern/entry.S assembly file, where it initializes the stack pointer to the top of the stack area reserved. It uses the assemblers .space option to reserve the empty space
+2. And at which “end” of this reserved area is the stack pointer initialized to point to?
+    The top (i.e. the high memory address): 0xf0110000
+
+Exercise 10 Questions:
+1. How many 32-bit words does each recursive nesting level of test_backtrace push on the stack, and what are those words?
+  Stack reserves space for 8 words:
+    0xf010ffbc:         0xf0100069        0x00000004        0x00000005        0x00000000
+    0xf010ffcc:         0x00010094        0x00010094        0x00010094        0xf010fff8
+  From higher memory addresses to lower:
+    %ebp
+    %ebx
+    unused at time of recursive call
+    unused at time of recursive call
+    unused at time of recursive call
+    5 (argument previously used for cprintf)
+    4 (argument for next call of test_backtrace)
+    Return Address for the recursive call
+
+Exercise 12 Questions:
+1. kern/kernel.ld sets up __STAB_BEGIN__ and __STAB_END__ as well as making the linker allocate space for the .stab information. Because of this, the stab information is stored in the symbol table.
+
+}
