@@ -10,9 +10,11 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE 80 // enough for one VGA text line
 
+uint32_t hex2int(char* str);
 
 struct Command {
   const char *name;
@@ -25,6 +27,11 @@ static struct Command commands[] = {
   { "help",      "Display this list of commands",        mon_help       },
   { "info-kern", "Display information about the kernel", mon_infokern   },
   { "backtrace", "Run a backtrace to show calling functions", mon_backtrace },
+  { "showmappings", "Show physical page mappings", mon_showmappings },
+  { "showallmappings", "Show physical page mappings", mon_showallmappings },
+  { "setperms", "Change permissions of page mapping", mon_setperms },
+  { "dumpp", "Dump memory contents of a physical region", mon_dumpp },
+  { "dumpv", "Dump memory contents of a virtual region", mon_dumpv },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -73,6 +80,171 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     ebp = (int *)*ebp;
   }
   return 0;
+}
+
+// Show pagetable mappings and permission bits for a range of addresses
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+  // Check arguments
+  if (argc != 3) {
+    cprintf("Usage: %s 0xaddr 0xlimit\n", argv[0]);
+    return -1;
+  }
+  // Convert hex strings to unsigned int values
+  uint32_t addr = hex2int(argv[1]), limit = hex2int(argv[2]);
+  // Loop through the addresses, jumping by PGSIZE
+  while (addr <= limit) {
+    // Get the pagetable entry for this address
+    pte_t *pte = pgdir_walk(kern_pgdir, (void *) addr, false);
+    if (!pte) {
+      cprintf("VA 0x%08x is not mapped to a PA\n", addr);
+    } else {
+      if (*pte & PTE_P) {
+        cprintf("VA 0x%08x | PA 0x%08x | Perms ", addr, PTE_ADDR(*pte));
+        cprintf("PTE_P(%x), PTE_U(%x), PTE_W(%x)\n", !!(*pte&PTE_P), !!(*pte&PTE_U), !!(*pte&PTE_W));
+      }
+    }
+    addr += PGSIZE;
+  }
+  return 0;
+}
+
+// Show all valid pagetable mappings and permission bits
+int
+mon_showallmappings(int argc, char **argv, struct Trapframe *tf)
+{
+  // Check arguments
+  if (argc != 1) {
+    cprintf("Usage: %s\n", argv[0]);
+    return -1;
+  }
+  // Start from VA 0x0 and go up to highest address
+  uint32_t addr = 0x0, limit = 0xffffffff;
+  // Loop through the addresses, jumping by PGSIZE
+  while (addr <= limit) {
+    // Get the pagetable entry for this address
+    pte_t *pte = pgdir_walk(kern_pgdir, (void *) addr, false);
+    if (pte) {
+      if (*pte & PTE_P) {
+        cprintf("VA 0x%08x | PA 0x%08x | Perms ", addr, PTE_ADDR(*pte));
+        cprintf("PTE_P(%x), PTE_U(%x), PTE_W(%x)\n", !!(*pte&PTE_P), !!(*pte&PTE_U), !!(*pte&PTE_W));
+      }
+    }
+    addr += PGSIZE;
+  }
+  return 0;
+}
+
+// Update a permission bit for a page
+int
+mon_setperms(int argc, char **argv, struct Trapframe *tf)
+{
+  // Check arguments
+  if (argc != 4) {
+    cprintf("Usage: %s 0xaddr (P|U|W) (0|1)\n", argv[0]);
+    return -1;
+  }
+  // Get arguments
+  uint32_t addr = hex2int(argv[1]);
+  char *perm_type = argv[2];
+  int set_bit = *argv[3] - '0';
+  // Get the pagetable entry
+  pte_t *pte = pgdir_walk(kern_pgdir, (void *)addr, false);
+  if (!pte) {
+    cprintf("Given address not mapped\n");
+    return -1;
+  }
+  // Print out the original permissions
+  cprintf("0x%08x original perms: PTE_P(%x), PTE_U(%x), PTE_W(%x)\n",
+          addr, !!(*pte&PTE_P), !!(*pte&PTE_U), !!(*pte&PTE_W));
+  if (set_bit) { // set the permission
+    if (*perm_type == 'P') {
+      *pte |= PTE_P;
+    } else if (*perm_type == 'U') {
+      *pte |= PTE_U;
+    } else if (*perm_type == 'W') {
+      *pte |= PTE_W;
+    }
+  } else { // unset the permission
+    if (*perm_type == 'P') {
+      uint32_t tmp = ~PTE_P;
+      *pte &= tmp;
+    } else if (*perm_type == 'U') {
+      uint32_t tmp = ~PTE_U;
+      *pte &= tmp;
+    } else if (*perm_type == 'W') {
+      uint32_t tmp = ~PTE_W;
+      *pte &= tmp;
+    }
+  }
+  // Print out the new permissions
+  cprintf("0x%08x new perms: PTE_P(%x), PTE_U(%x), PTE_W(%x)\n",
+          addr, !!(*pte&PTE_P), !!(*pte&PTE_U), !!(*pte&PTE_W));
+  return 0;
+}
+
+// Dump a range of virtual addresses
+int
+mon_dumpv(int argc, char **argv, struct Trapframe *tf)
+{
+  // Check arguments
+  if (argc != 3) {
+    cprintf("Usage: %s 0xaddr 0xcount\n", argv[0]);
+    return -1;
+  }
+  // Get address and count arguments
+  uint32_t *addr = (uint32_t *)hex2int(argv[1]);
+  int count = hex2int(argv[2]);
+  // Loop through count addresses, printing the contents
+  while (count > 0) {
+    cprintf("VA 0x%08x: 0x%08x 0x%08x 0x%08x 0x%08x \n", addr, addr[0], addr[1], addr[2], addr[3]);
+    addr += 4;
+    count -= 0x10;
+  }
+  return 0;
+}
+
+// Dump a range of physical addresses
+int
+mon_dumpp(int argc, char **argv, struct Trapframe *tf)
+{
+  // Check arguments
+  if (argc != 3) {
+    cprintf("Usage: %s 0xaddr 0xcount\n", argv[0]);
+    return -1;
+  }
+  // Get address and count arguments
+  uint32_t *addr = (uint32_t *)KADDR(hex2int(argv[1])); // KADDR to make virt from phys
+  int count = hex2int(argv[2]);
+  // Loop through count addresses, printing the contents
+  while (count > 0) {
+    cprintf("PA 0x%08x: 0x%08x 0x%08x 0x%08x 0x%08x \n", PADDR(addr), addr[0], addr[1], addr[2], addr[3]);
+    addr += 4;
+    count -= 0x10;
+  }
+  return 0;
+}
+
+// Take in a hex-formatted string and return a uint32_t
+uint32_t
+hex2int(char *str)
+{
+  uint32_t number = 0; // holds final result
+  uint32_t temp; // holds each character
+  str += 2; // chop off the prefix
+  while (*str) { // until we hit the null byte
+    // Set temp to char's integer value
+    if (*str >= 'a') {
+      temp = *str - 'a' + 10;
+    } else {
+      temp = *str - '0';
+    }
+    // Add temp to total number
+    number = (number * 16) + temp;
+    str++;
+  }
+  return number;
 }
 
 

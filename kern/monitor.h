@@ -17,4 +17,11 @@ int mon_infokern(int argc, char **argv, struct Trapframe *tf);
 int mon_infopg(int argc, char **argv, struct Trapframe *tf);
 int mon_backtrace(int argc, char **argv, struct Trapframe *tf);
 
+// Custom debugging functions
+int mon_showmappings(int argc, char **argv, struct Trapframe *tf);
+int mon_showallmappings(int argc, char **argv, struct Trapframe *tf);
+int mon_setperms(int argc, char **argv, struct Trapframe *tf);
+int mon_dumpp(int argc, char **argv, struct Trapframe *tf);
+int mon_dumpv(int argc, char **argv, struct Trapframe *tf);
+
 #endif  // !JOS_KERN_MONITOR_H
