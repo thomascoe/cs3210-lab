@@ -65,6 +65,8 @@ trap_init(void)
   extern struct Segdesc gdt[];
 
   // LAB 3: Your code here.
+
+  /*
   // Trap functions defined in trapentry.S
   extern void trap_divide();
   extern void trap_debug();
@@ -87,7 +89,7 @@ trap_init(void)
   extern void trap_mchk();
   extern void trap_simderr();
 
-  /* Arbitrary traps for syscall and catchall */
+  // Arbitrary traps for syscall and catchall
   extern void trap_syscall();
   extern void trap_default();
 
@@ -111,7 +113,29 @@ trap_init(void)
   SETGATE(idt[T_MCHK], 0, GD_KT, trap_mchk, 0);
   SETGATE(idt[T_SIMDERR], 0, GD_KT, trap_simderr, 0);
   SETGATE(idt[T_SYSCALL], 0, GD_KT, trap_syscall, 3); // User DPL
-  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_default, 0);
+  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_default, 0);*/
+
+  // Function array (declared in trapentry.S)
+  extern void (*trap_funcs[])();
+
+  // Loop through the standard interrupts (DIVIDE through SIMDERR) and set idt
+  int i;
+  for (i = T_DIVIDE; i <= T_SIMDERR; i++) {
+    // Skip over reserved interrupts
+    if (i == 9 || i == 15) {
+      continue;
+    }
+    // Make certain interrupts able to be generated from user
+    if (i == T_BRKPT) {
+      SETGATE(idt[i], 0, GD_KT, trap_funcs[i], 3);
+    } else {
+      SETGATE(idt[i], 0, GD_KT, trap_funcs[i], 0);
+    }
+  }
+
+  // Set SYSCALL and DEFAULT
+  SETGATE(idt[T_SYSCALL], 0, GD_KT, trap_funcs[T_SYSCALL], 3);
+  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_funcs[T_DEFAULT], 0);
 
   // Per-CPU setup
   trap_init_percpu();
@@ -191,6 +215,32 @@ trap_dispatch(struct Trapframe *tf)
   // Handle processor exceptions.
   // LAB 3: Your code here.
 
+  // Dispatch to pagefault handler
+  if (tf->tf_trapno == T_PGFLT) {
+    page_fault_handler(tf);
+    return;
+  }
+
+  // Invoke the kernel monitor for breakpoints
+  if (tf->tf_trapno == T_BRKPT) {
+    monitor(tf);
+    return;
+  }
+
+  // Invoke the syscall function with appropriate arguments
+  if (tf->tf_trapno == T_SYSCALL) {
+    int32_t result = syscall(tf->tf_regs.reg_eax, // System call number
+        // Syscall arguments (up to 5)
+        tf->tf_regs.reg_edx,
+        tf->tf_regs.reg_ecx,
+        tf->tf_regs.reg_ebx,
+        tf->tf_regs.reg_edi,
+        tf->tf_regs.reg_esi
+        );
+    tf->tf_regs.reg_eax = result; // Save the result into %eax
+    return;
+  }
+
   // Unexpected trap: The user process or the kernel has a bug.
   print_trapframe(tf);
   if (tf->tf_cs == GD_KT)
@@ -252,6 +302,11 @@ page_fault_handler(struct Trapframe *tf)
   // Handle kernel-mode page faults.
 
   // LAB 3: Your code here.
+  // Check if code segment is executing in kernel mode
+  if (tf->tf_cs == GD_KT) {
+    print_trapframe(tf);
+    panic("Kernel pagefault!\n");
+  }
 
   // We've already handled kernel-mode exceptions, so if we get here,
   // the page fault happened in user mode.

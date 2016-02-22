@@ -584,7 +584,37 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
   // LAB 3: Your code here.
+  // start at the beginning of the first page
+  void *cur = (void *)ROUNDDOWN(va, PGSIZE);
 
+  // Loop until we have checked all applicable pages
+  while (cur < ROUNDUP(va + len, PGSIZE)) {
+    bool bad_access = false;
+
+    // Ensure address is below ULIM
+    if ((uint32_t)cur >= ULIM) {
+      bad_access = true;
+    }
+
+    // Ensure page table gives correct permissions
+    pte_t *pte = pgdir_walk(env->env_pgdir, cur, false);
+    if (!pte || (*pte & (perm|PTE_P)) != (perm|PTE_P)) {
+      bad_access = true;
+    }
+
+    // If this access was bad, set user_mem_check_addr and return error
+    if (bad_access) {
+      if (cur < va) {
+        user_mem_check_addr = (uint32_t)va;
+      } else {
+        user_mem_check_addr = (uint32_t)cur;
+      }
+      return -E_FAULT;
+    }
+
+    // Jump to next page
+    cur += PGSIZE;
+  }
   return 0;
 }
 

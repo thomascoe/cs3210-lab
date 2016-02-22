@@ -39,3 +39,49 @@ protection exception (int $13) is called as a result.
                                 Part B
 
 --------------------------------------------------------------------------------
+
+3. The break point test case will either generate a break point exception or a
+general protection fault depending on how you initialized the break point entry
+in the IDT (i.e., your call to SETGATE from trap_init). Why? How do you need to
+set it up in order to get the breakpoint exception to work as specified above
+and what incorrect setup would cause it to trigger a general protection fault?
+
+Answer:
+If you pass in a 0 as the last argument of SETGATE, it makes that interrupt only
+executible from kernel mode. If a user mode application tried to call that
+interrupt directly (as is the case in the breakpoint test), a general protection
+fault would be generated instead. This can be fixed by using 3 as the last
+argument to SETGATE, but only for the interrupts that should be able to be
+generated from usermode (such as T_BRKPT)
+
+--------------------------------------------------------------------------------
+
+4. What do you think is the point of these mechanisms, particularly in light of
+what the user/softint test program does?
+
+Answer:
+These mechanisms are in place to protect the OS from intervention by the user.
+There are some interrupts that should never be directly called by the user (such
+as pagefault), and allowing the user to call these could compromise the kernel.
+
+================================================================================
+================================================================================
+
+                            Challenge Implementation
+
+--------------------------------------------------------------------------------
+
+Challenge! You probably have a lot of very similar code right now, between the
+lists of TRAPHANDLER in trapentry.S and their installations in trap.c. Clean
+this up. Change the macros in trapentry.S to automatically generate a table for
+trap.c to use. Note that you can switch between laying down code and data in the
+assembler by using the directives .text and .data.
+
+Answer:
+To implement this, I modified trapentry.S to create a function array in memory
+by simply using the macros defined in this file. I modified the macros to switch
+into .data mode and reserve 4 bytes in the array for each handler. Then, before
+calling the macros, I defined the array using .globl. I also had to make sure to
+reserve space in the array for the missing indexes (like traps 9 and 15). Then I
+modified trap.c to call SETGATE in a loop so that it reduces some of the code
+redundancy.

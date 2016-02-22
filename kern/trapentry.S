@@ -21,6 +21,9 @@
  * where NAME is the argument passed to TRAPHANDLER.
  */
 #define TRAPHANDLER(name, num)                                          \
+        .data;              /*reserve 4 bytes for the func array*/      \
+        .long name;                                                     \
+        .text;              /*switch back into text section*/           \
         .globl name;            /* define global symbol for 'name' */   \
         .type name, @function;  /* symbol type is function */           \
         .align 2;               /* align function definition */         \
@@ -33,6 +36,9 @@
  * format in either case.
  */
 #define TRAPHANDLER_NOEC(name, num)                                     \
+        .data;              /*reserve 4 bytes for the func array*/      \
+        .long name;                                                     \
+        .text;              /*switch back into text section*/           \
         .globl name;                                                    \
         .type name, @function;                                          \
         .align 2;                                                       \
@@ -41,7 +47,13 @@
         pushl $(num);                                                   \
         jmp _alltraps
 
-.text
+/* trap_funcs array */
+.data
+.align 2
+.globl trap_funcs
+trap_funcs:
+
+//.text
 
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
@@ -58,19 +70,27 @@ TRAPHANDLER_NOEC(   trap_illop,     T_ILLOP);
 TRAPHANDLER_NOEC(   trap_device,    T_DEVICE);
 TRAPHANDLER(        trap_dblflt,    T_DBLFLT);
 // Trap 9 reserved
+.data
+.long 0 // Reserve 4 bytes in the array to preserve indexing
 TRAPHANDLER(        trap_tss,       T_TSS);
 TRAPHANDLER(        trap_segnp,     T_SEGNP);
 TRAPHANDLER(        trap_stack,     T_STACK);
 TRAPHANDLER(        trap_gpflt,     T_GPFLT);
 TRAPHANDLER(        trap_pgflt,     T_PGFLT);
 // Trap 15 reserved
+.data
+.long 0 // Reserve 4 bytes in the array to preserve indexing
 TRAPHANDLER_NOEC(   trap_fperr,     T_FPERR);
 TRAPHANDLER(        trap_align,     T_ALIGN);
 TRAPHANDLER_NOEC(   trap_mchk,      T_MCHK);
 TRAPHANDLER_NOEC(   trap_simderr,   T_SIMDERR);
 
 /* Arbitrary traps for syscall and catchall */
+.data
+.space ((T_SYSCALL-T_SIMDERR-1)*4); // insert space before SYSCALL
 TRAPHANDLER_NOEC(   trap_syscall,   T_SYSCALL);
+.data
+.space ((T_DEFAULT-T_SYSCALL-1)*4); // insert space before DEFAULT
 TRAPHANDLER_NOEC(   trap_default,   T_DEFAULT);
 
 
