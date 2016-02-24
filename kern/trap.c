@@ -71,8 +71,78 @@ trap_init(void)
 {
   extern struct Segdesc gdt[];
 
-
   // LAB 3: Your code here.
+
+  /*
+  // Trap functions defined in trapentry.S
+  extern void trap_divide();
+  extern void trap_debug();
+  extern void trap_nmi();
+  extern void trap_brkpt();
+  extern void trap_oflow();
+  extern void trap_bound();
+  extern void trap_illop();
+  extern void trap_device();
+  extern void trap_dblflt();
+  // Trap 9 reserved
+  extern void trap_tss();
+  extern void trap_segnp();
+  extern void trap_stack();
+  extern void trap_gpflt();
+  extern void trap_pgflt();
+  // Trap 15 reserved
+  extern void trap_fperr();
+  extern void trap_align();
+  extern void trap_mchk();
+  extern void trap_simderr();
+
+  // Arbitrary traps for syscall and catchall
+  extern void trap_syscall();
+  extern void trap_default();
+
+  // Set up interrupt descriptor table for each interrupt
+  SETGATE(idt[T_DIVIDE], 0, GD_KT, trap_divide, 0);
+  SETGATE(idt[T_DEBUG], 0, GD_KT, trap_debug, 0);
+  SETGATE(idt[T_NMI], 0, GD_KT, trap_nmi, 0);
+  SETGATE(idt[T_BRKPT], 0, GD_KT, trap_brkpt, 0);
+  SETGATE(idt[T_OFLOW], 0, GD_KT, trap_oflow, 0);
+  SETGATE(idt[T_BOUND], 0, GD_KT, trap_bound, 0);
+  SETGATE(idt[T_ILLOP], 0, GD_KT, trap_illop, 0);
+  SETGATE(idt[T_DEVICE], 0, GD_KT, trap_device, 0);
+  SETGATE(idt[T_DBLFLT], 0, GD_KT, trap_dblflt, 0);
+  SETGATE(idt[T_TSS], 0, GD_KT, trap_tss, 0);
+  SETGATE(idt[T_SEGNP], 0, GD_KT, trap_segnp, 0);
+  SETGATE(idt[T_STACK], 0, GD_KT, trap_stack, 0);
+  SETGATE(idt[T_GPFLT], 0, GD_KT, trap_gpflt, 0);
+  SETGATE(idt[T_PGFLT], 0, GD_KT, trap_pgflt, 0);
+  SETGATE(idt[T_FPERR], 0, GD_KT, trap_fperr, 0);
+  SETGATE(idt[T_ALIGN], 0, GD_KT, trap_align, 0);
+  SETGATE(idt[T_MCHK], 0, GD_KT, trap_mchk, 0);
+  SETGATE(idt[T_SIMDERR], 0, GD_KT, trap_simderr, 0);
+  SETGATE(idt[T_SYSCALL], 0, GD_KT, trap_syscall, 3); // User DPL
+  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_default, 0);*/
+
+  // Function array (declared in trapentry.S)
+  extern void (*trap_funcs[])();
+
+  // Loop through the standard interrupts (DIVIDE through SIMDERR) and set idt
+  int i;
+  for (i = T_DIVIDE; i <= T_SIMDERR; i++) {
+    // Skip over reserved interrupts
+    if (i == 9 || i == 15) {
+      continue;
+    }
+    // Make certain interrupts able to be generated from user
+    if (i == T_BRKPT) {
+      SETGATE(idt[i], 0, GD_KT, trap_funcs[i], 3);
+    } else {
+      SETGATE(idt[i], 0, GD_KT, trap_funcs[i], 0);
+    }
+  }
+
+  // Set SYSCALL and DEFAULT
+  SETGATE(idt[T_SYSCALL], 0, GD_KT, trap_funcs[T_SYSCALL], 3);
+  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_funcs[T_DEFAULT], 0);
 
   // Per-CPU setup
   trap_init_percpu();
@@ -175,6 +245,32 @@ trap_dispatch(struct Trapframe *tf)
   // Handle processor exceptions.
   // LAB 3: Your code here.
 
+  // Dispatch to pagefault handler
+  if (tf->tf_trapno == T_PGFLT) {
+    page_fault_handler(tf);
+    return;
+  }
+
+  // Invoke the kernel monitor for breakpoints
+  if (tf->tf_trapno == T_BRKPT) {
+    monitor(tf);
+    return;
+  }
+
+  // Invoke the syscall function with appropriate arguments
+  if (tf->tf_trapno == T_SYSCALL) {
+    int32_t result = syscall(tf->tf_regs.reg_eax, // System call number
+        // Syscall arguments (up to 5)
+        tf->tf_regs.reg_edx,
+        tf->tf_regs.reg_ecx,
+        tf->tf_regs.reg_ebx,
+        tf->tf_regs.reg_edi,
+        tf->tf_regs.reg_esi
+        );
+    tf->tf_regs.reg_eax = result; // Save the result into %eax
+    return;
+  }
+
   // Handle spurious interrupts
   // The hardware sometimes raises these because of noise on the
   // IRQ line or other reasons. We don't care.
@@ -187,6 +283,7 @@ trap_dispatch(struct Trapframe *tf)
   // Handle clock interrupts. Don't forget to acknowledge the
   // interrupt using lapic_eoi() before calling the scheduler!
   // LAB 4: Your code here.
+
 
   // Unexpected trap: The user process or the kernel has a bug.
   print_trapframe(tf);
@@ -270,6 +367,11 @@ page_fault_handler(struct Trapframe *tf)
   // Handle kernel-mode page faults.
 
   // LAB 3: Your code here.
+  // Check if code segment is executing in kernel mode
+  if (tf->tf_cs == GD_KT) {
+    print_trapframe(tf);
+    panic("Kernel pagefault!\n");
+  }
 
   // We've already handled kernel-mode exceptions, so if we get here,
   // the page fault happened in user mode.
