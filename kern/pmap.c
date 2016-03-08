@@ -273,6 +273,12 @@ mem_init_mp(void)
   //     Permissions: kernel RW, user NONE
   //
   // LAB 4: Your code here:
+  int i;
+  uintptr_t stack_va = KSTACKTOP - KSTKSIZE;
+  for (i = 0; i < NCPU; i++) {
+    boot_map_region(kern_pgdir, stack_va, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
+    stack_va -= (KSTKSIZE + KSTKGAP);
+  }
 
 }
 
@@ -316,6 +322,7 @@ page_init(void)
   size_t i;
   for (i = 0; i < npages; i++) {
     if (i == 0 || // page 0 in use
+            (i == MPENTRY_PADDR / PGSIZE) || // AP bootstrap code
             (i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE) || // IO Hole
             (i >= EXTPHYSMEM / PGSIZE && i < 4*MB / PGSIZE)) { // The kernel occupies the rest of the space up to the 4MB
         // These pages are in use (do not add to freelist)
@@ -626,7 +633,13 @@ mmio_map_region(physaddr_t pa, size_t size)
   // Hint: The staff solution uses boot_map_region.
   //
   // Your code here:
-  panic("mmio_map_region not implemented");
+  if (base + ROUNDUP(size, PGSIZE) > MMIOLIM) {
+    panic("reservation will overflow MMIOLIM");
+  }
+  boot_map_region(kern_pgdir, base, ROUNDUP(size,PGSIZE), pa, PTE_W|PTE_PCD|PTE_PWT);
+  void *temp = (void*)base;
+  base += ROUNDUP(size, PGSIZE);
+  return temp;
 }
 
 static uintptr_t user_mem_check_addr;

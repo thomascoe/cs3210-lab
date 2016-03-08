@@ -598,6 +598,9 @@ env_run(struct Env *e)
   curenv->env_runs++;
   lcr3(PADDR(curenv->env_pgdir));
 
+  // Unlock before dropping into user space
+  unlock_kernel();
+
   // Restore environment's registers
   env_pop_tf(&curenv->env_tf);
 }
