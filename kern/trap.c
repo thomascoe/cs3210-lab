@@ -406,6 +406,38 @@ page_fault_handler(struct Trapframe *tf)
   //   (the 'tf' variable points at 'curenv->env_tf').
 
   // LAB 4: Your code here.
+  if (curenv->env_pgfault_upcall) {
+    struct UTrapframe *ut = NULL;
+    // Check if trapping esp is in the UXSTACK (i.e. recursive call happened)
+    if (tf->tf_esp >= UXSTACKTOP - PGSIZE && tf->tf_esp <= UXSTACKTOP - 1) {
+      // Allocate space for trapframe + one word of scratch space to return
+      ut = (struct UTrapframe *)(tf->tf_esp - 4 - sizeof(struct UTrapframe));
+    } else {
+      // Allocate space for only trapframe
+      ut = (struct UTrapframe *)(UXSTACKTOP - sizeof(struct UTrapframe));
+    }
+
+    // Check that this page is allocated and writeable (and that stack hasn't overflowed)
+    user_mem_assert(curenv, ut, sizeof(struct UTrapframe), (PTE_U|PTE_W));
+
+    // Set the virtual address causing the fault
+    ut->utf_fault_va = fault_va;
+
+    // Copy fields from kernel trapframe
+    ut->utf_err = tf->tf_err;
+    ut->utf_regs = tf->tf_regs;
+    ut->utf_eip = tf->tf_eip;
+    ut->utf_eflags = tf->tf_eflags;
+    ut->utf_esp = tf->tf_esp;
+
+    // Update stack value (has to happen AFTER esp backed up to ut)
+    tf->tf_esp = (intptr_t)ut;
+    // Update eip to the pagefault upcall to run
+    tf->tf_eip = (intptr_t)curenv->env_pgfault_upcall;
+
+    env_run(curenv); // Run the current env (with new esp/eip)
+    return;
+  }
 
   // Destroy the environment that caused the fault.
   cprintf("[%08x] user fault va %08x ip %08x\n",
