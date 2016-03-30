@@ -63,4 +63,32 @@ vital to ensuring that the environment picks up right where it left off. The
 register contents are saved into the env_tf when a trap occurs, and are restored
 by env_pop_tf in env_run() when a new environment is scheduled on the processor
 
+================================================================================
+================================================================================
+
+                              CHALLENGE PROBLEM
+
 --------------------------------------------------------------------------------
+
+Question:
+The prime sieve is only one neat use of message passing between a large number
+of concurrent programs. Read C. A. R. Hoare, Communicating Sequential Processes,
+Communications of the ACM 21(8) (August 1978), 666-667, and implement the matrix
+multiplication example.
+
+Answer:
+See: user/matrix.c
+I implemented this by creating a user level program which uses fork to spawn 9
+child processes, each for an entry in the array. The child processes wait for
+input (via IPC) from the parent for the next number to multiply, then they
+multiply the number received from the parent by their matrix number, and call
+ipc_recv again to get the partial sum from the child to the north of them in the
+matrix. They then use ipc_send to send their partial sum result to the child to
+the south of them (or in the bottom rows case, the parent). The parent receives
+the answer, and stores and prints it as it gets each row.
+
+This should be runnable by 'make run-matrix'. For some reason, this would not
+compile for me (it doesn't recognize the new user program somehow). In order to
+fix this, I made a copy of hello.c, and then did 'mv matrix.c hello.c' to
+overwrite hello.c with my matrix file. Then I used 'make run-hello' to run the
+matrix multiplication user program.

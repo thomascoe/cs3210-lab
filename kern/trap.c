@@ -140,9 +140,14 @@ trap_init(void)
     }
   }
 
+  // Set IRQ gates
+  for (i = IRQ_OFFSET; i < IRQ_OFFSET + 16; i++) {
+    SETGATE(idt[i], 0, GD_KT, trap_funcs[i], 0);
+  }
+
   // Set SYSCALL and DEFAULT
   SETGATE(idt[T_SYSCALL], 0, GD_KT, trap_funcs[T_SYSCALL], 3);
-  SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_funcs[T_DEFAULT], 0);
+  //SETGATE(idt[T_DEFAULT], 0, GD_KT, trap_funcs[T_DEFAULT], 0);
 
   // Per-CPU setup
   trap_init_percpu();
@@ -187,7 +192,7 @@ trap_init_percpu(void)
 
   // Load the TSS selector (like other segment selectors, the
   // bottom three bits are special; we leave them 0)
-  ltr(GD_TSS0);
+  ltr(GD_TSS0 + (cpunum() << 3));
 
   // Load the IDT
   lidt(&idt_pd);
@@ -283,9 +288,13 @@ trap_dispatch(struct Trapframe *tf)
   // Handle clock interrupts. Don't forget to acknowledge the
   // interrupt using lapic_eoi() before calling the scheduler!
   // LAB 4: Your code here.
+  if (tf->tf_trapno == (IRQ_OFFSET + IRQ_TIMER)) {
+    lapic_eoi();
+    sched_yield();
+    return;
+  }
 
-
-  // Unexpected trap: The user process or the kernel has a bug.
+  cprintf("TRAPNO: %08x\n", (tf->tf_trapno));
   print_trapframe(tf);
   if (tf->tf_cs == GD_KT)
     panic("unhandled trap in kernel");
@@ -293,6 +302,8 @@ trap_dispatch(struct Trapframe *tf)
     env_destroy(curenv);
     return;
   }
+
+  // Unexpected trap: The user process or the kernel has a bug.
 }
 
 void

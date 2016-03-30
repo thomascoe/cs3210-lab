@@ -86,9 +86,27 @@ TRAPHANDLER(        trap_align,     T_ALIGN);
 TRAPHANDLER_NOEC(   trap_mchk,      T_MCHK);
 TRAPHANDLER_NOEC(   trap_simderr,   T_SIMDERR);
 
-/* Arbitrary traps for syscall and catchall */
 .data
-.space ((T_SYSCALL-T_SIMDERR-1)*4); // insert space before SYSCALL
+.space ((IRQ_OFFSET-T_SIMDERR-1)*4)
+// IRQ Handlers
+TRAPHANDLER_NOEC(   irq0,           (IRQ_OFFSET))
+TRAPHANDLER_NOEC(   irq1,           (IRQ_OFFSET + 1))
+TRAPHANDLER_NOEC(   irq2,           (IRQ_OFFSET + 2))
+TRAPHANDLER_NOEC(   irq3,           (IRQ_OFFSET + 3))
+TRAPHANDLER_NOEC(   irq4,           (IRQ_OFFSET + 4))
+TRAPHANDLER_NOEC(   irq5,           (IRQ_OFFSET + 5))
+TRAPHANDLER_NOEC(   irq6,           (IRQ_OFFSET + 6))
+TRAPHANDLER_NOEC(   irq7,           (IRQ_OFFSET + 7))
+TRAPHANDLER_NOEC(   irq8,           (IRQ_OFFSET + 8))
+TRAPHANDLER_NOEC(   irq9,           (IRQ_OFFSET + 9))
+TRAPHANDLER_NOEC(   irq10,          (IRQ_OFFSET + 10))
+TRAPHANDLER_NOEC(   irq11,          (IRQ_OFFSET + 11))
+TRAPHANDLER_NOEC(   irq12,          (IRQ_OFFSET + 12))
+TRAPHANDLER_NOEC(   irq13,          (IRQ_OFFSET + 13))
+TRAPHANDLER_NOEC(   irq14,          (IRQ_OFFSET + 14))
+TRAPHANDLER_NOEC(   irq15,          (IRQ_OFFSET + 15))
+
+//.space ((T_SYSCALL-T_SIMDERR-1)*4); // insert space before SYSCALL
 TRAPHANDLER_NOEC(   trap_syscall,   T_SYSCALL);
 .data
 .space ((T_DEFAULT-T_SYSCALL-1)*4); // insert space before DEFAULT
