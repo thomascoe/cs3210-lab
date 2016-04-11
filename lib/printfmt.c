@@ -26,6 +26,8 @@ static const char * const error_string[MAXERROR] =
   [E_NO_MEM]      = "out of memory",
   [E_NO_FREE_ENV] = "out of environments",
   [E_FAULT]       = "segmentation fault",
+  [E_IPC_NOT_RECV] = "env is not recving",
+  [E_EOF]         = "unexpected end of file",
 };
 
 /*
@@ -206,10 +208,9 @@ process_precision:
     // (unsigned) octal
     case 'o':
       // Replace this with your code.
-      putch('X', putdat);
-      putch('X', putdat);
-      putch('X', putdat);
-      break;
+      num = getint(&ap, lflag);
+      base = 8;
+      goto number;
 
     // pointer
     case 'p':

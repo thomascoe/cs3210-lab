@@ -1,0 +1,94 @@
+================================================================================
+================================================================================
+
+                                Part A
+
+--------------------------------------------------------------------------------
+
+1. Compare kern/mpentry.S side by side with boot/boot.S. Bearing in mind that
+kern/mpentry.S is compiled and linked to run above KERNBASE just like everything
+else in the kernel, what is the purpose of macro MPBOOTPHYS? Why is it necessary
+in kern/mpentry.S but not in boot/boot.S? In other words, what could go wrong if
+it were omitted in kern/mpentry.S? Hint: recall the differences between the link
+address and the load address that we have discussed in Lab 1.
+
+Answer:
+The MPBOOTPHYS macro is required to calculate the absolute address of symbols by
+subtracting mpentry_start and the physical address where MPENTRY is loaded into
+memory (0x7000). This is because the linker does not know that we are loading
+this code into memory at this address, so it would not calculate correct
+addresses for the code.
+
+--------------------------------------------------------------------------------
+
+2. It seems that using the big kernel lock guarantees that only one CPU can run
+the kernel code at a time. Why do we still need separate kernel stacks for each
+CPU? Describe a scenario in which using a shared kernel stack will go wrong,
+even with the protection of the big kernel lock.
+
+Answer:
+The big kernel lock doesn't protect the stack from things being written to it by
+systems such as the trapping functions that can write to the stack before
+fully transitioning control to the kernel. So even if CPU0 has the kernel lock,
+a trap can be raised by CPU1 which would copy the trapframe onto the stack
+before kernel code running on CPU1 tries to get the big kernel lock. This could
+corrupt the stack data that CPU0 is expecting to see.
+
+--------------------------------------------------------------------------------
+
+3. In your implementation of env_run() you should have called lcr3(). Before and
+after the call to lcr3(), your code makes references (at least it should) to the
+variable e, the argument to env_run. Upon loading the %cr3 register, the
+addressing context used by the MMU is instantly changed. But a virtual address
+(namely e) has meaning relative to a given address context–the address context
+specifies the physical address to which the virtual address maps. Why can the
+pointer e be dereferenced both before and after the addressing switch?
+
+Answer:
+The VA space of all envs is identical above UTOP except for UVPT, so regardless
+of what page directory we're using, the virtual mapping of the variable e will
+be the same.
+
+--------------------------------------------------------------------------------
+
+4. Whenever the kernel switches from one environment to another, it must ensure
+the old environment’s registers are saved so they can be restored properly
+later. Why? Where does this happen?
+
+Answer:
+The kernel has to save this so that when an environment is returned to, it can
+resume execution at exactly the point where it left off. Not only where the
+instruction pointer is, but also the stack pointer and all register contents are
+vital to ensuring that the environment picks up right where it left off. The
+register contents are saved into the env_tf when a trap occurs, and are restored
+by env_pop_tf in env_run() when a new environment is scheduled on the processor
+
+================================================================================
+================================================================================
+
+                              CHALLENGE PROBLEM
+
+--------------------------------------------------------------------------------
+
+Question:
+The prime sieve is only one neat use of message passing between a large number
+of concurrent programs. Read C. A. R. Hoare, Communicating Sequential Processes,
+Communications of the ACM 21(8) (August 1978), 666-667, and implement the matrix
+multiplication example.
+
+Answer:
+See: user/matrix.c
+I implemented this by creating a user level program which uses fork to spawn 9
+child processes, each for an entry in the array. The child processes wait for
+input (via IPC) from the parent for the next number to multiply, then they
+multiply the number received from the parent by their matrix number, and call
+ipc_recv again to get the partial sum from the child to the north of them in the
+matrix. They then use ipc_send to send their partial sum result to the child to
+the south of them (or in the bottom rows case, the parent). The parent receives
+the answer, and stores and prints it as it gets each row.
+
+This should be runnable by 'make run-matrix'. For some reason, this would not
+compile for me (it doesn't recognize the new user program somehow). In order to
+fix this, I made a copy of hello.c, and then did 'mv matrix.c hello.c' to
+overwrite hello.c with my matrix file. Then I used 'make run-hello' to run the
+matrix multiplication user program.

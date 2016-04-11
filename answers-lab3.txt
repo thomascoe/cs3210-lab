@@ -1,0 +1,87 @@
+================================================================================
+================================================================================
+
+                                Part A
+
+--------------------------------------------------------------------------------
+
+1. What is the purpose of having an individual handler function for each
+exception/interrupt? (i.e., if all exceptions/interrupts were delivered to the
+same handler, what feature that exists in the current implementation could not
+be provided?)
+
+Answer:
+The different handler functions allow us to push a different interrupt vector
+number onto the stack, so that the Trapframe passed to the trap function has a
+different interrupt number for each interrupt and we can do different things for
+each.
+
+--------------------------------------------------------------------------------
+
+2. Did you have to do anything to make the user/softint program behave
+correctly? The grade script expects it to produce a general protection fault
+(trap 13), but softint‘s code says int $14. Why should this produce interrupt
+vector 13? What happens if the kernel actually allows softint‘s int $14
+instruction to invoke the kernel’s page fault handler (which is interrupt
+vector 14)?
+
+Answer:
+I used the SETGATE macro for setting up the IDT. This sets a descriptor
+privelege level, which is used to determine if the caller has the privelege to
+call this interrupt directly. For interrupt 14 (page fault), this has a DPL of 0
+meaning only level 0 (Kernel) can call this directly with the INT instruction.
+When user mode tries to invoke this interrupt, this is not allowed and a general
+protection exception (int $13) is called as a result.
+
+================================================================================
+================================================================================
+
+                                Part B
+
+--------------------------------------------------------------------------------
+
+3. The break point test case will either generate a break point exception or a
+general protection fault depending on how you initialized the break point entry
+in the IDT (i.e., your call to SETGATE from trap_init). Why? How do you need to
+set it up in order to get the breakpoint exception to work as specified above
+and what incorrect setup would cause it to trigger a general protection fault?
+
+Answer:
+If you pass in a 0 as the last argument of SETGATE, it makes that interrupt only
+executible from kernel mode. If a user mode application tried to call that
+interrupt directly (as is the case in the breakpoint test), a general protection
+fault would be generated instead. This can be fixed by using 3 as the last
+argument to SETGATE, but only for the interrupts that should be able to be
+generated from usermode (such as T_BRKPT)
+
+--------------------------------------------------------------------------------
+
+4. What do you think is the point of these mechanisms, particularly in light of
+what the user/softint test program does?
+
+Answer:
+These mechanisms are in place to protect the OS from intervention by the user.
+There are some interrupts that should never be directly called by the user (such
+as pagefault), and allowing the user to call these could compromise the kernel.
+
+================================================================================
+================================================================================
+
+                            Challenge Implementation
+
+--------------------------------------------------------------------------------
+
+Challenge! You probably have a lot of very similar code right now, between the
+lists of TRAPHANDLER in trapentry.S and their installations in trap.c. Clean
+this up. Change the macros in trapentry.S to automatically generate a table for
+trap.c to use. Note that you can switch between laying down code and data in the
+assembler by using the directives .text and .data.
+
+Answer:
+To implement this, I modified trapentry.S to create a function array in memory
+by simply using the macros defined in this file. I modified the macros to switch
+into .data mode and reserve 4 bytes in the array for each handler. Then, before
+calling the macros, I defined the array using .globl. I also had to make sure to
+reserve space in the array for the missing indexes (like traps 9 and 15). Then I
+modified trap.c to call SETGATE in a loop so that it reduces some of the code
+redundancy.
