@@ -146,7 +146,22 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
   // LAB 5: Your code here.
   // Remember to check whether the user has supplied us with a good
   // address!
-  panic("sys_env_set_trapframe not implemented");
+  //panic("sys_env_set_trapframe not implemented");
+
+  // Look up the environment
+  struct Env *env = NULL;
+  int rc = envid2env(envid, &env, true);
+  if (rc < 0) {
+    return rc;
+  }
+
+  // Ensure tf parameters
+  tf->tf_cs |= 0x3;
+  tf->tf_eflags |= FL_IF;
+
+  // Update env tf
+  env->env_tf = *tf;
+  return 0;
 }
 
 // Set the page fault upcall for 'envid' by modifying the corresponding struct
@@ -396,14 +411,14 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 
   if (srcva < (void *) UTOP) {
     // Ensure srcva is page aligned
-    if (srcva != ROUNDDOWN(srcva, PGSIZE)) {
+    if (srcva != ROUNDUP(srcva, PGSIZE) || perm != (perm & PTE_SYSCALL)) {
       return -E_INVAL;
     }
 
     // Lookup the page
     pte_t *pte;
     struct PageInfo *page = page_lookup(curenv->env_pgdir, srcva, &pte);
-    if (!page || (*pte&perm) != perm) {
+    if (!page) {
       return -E_INVAL;
     }
 
@@ -420,7 +435,10 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
       }
       env->env_ipc_perm = perm;
     }
+  } else {
+    env->env_ipc_perm = 0;
   }
+
   // Update environment status
   env->env_ipc_from = curenv->env_id;
   env->env_ipc_value = value;
@@ -485,6 +503,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
     return sys_exofork();
   case SYS_env_set_status:
     return sys_env_set_status((envid_t)a1, a2);
+  case SYS_env_set_trapframe:
+    return sys_env_set_trapframe((envid_t)a1, (struct Trapframe *)a2);
   case SYS_env_set_pgfault_upcall:
     return sys_env_set_pgfault_upcall((envid_t)a1, (void *)a2);
   case SYS_page_alloc:

@@ -1,0 +1,17 @@
+================================================================================
+                                  QUESTIONS
+================================================================================
+
+1. Do you have to do anything else to ensure that this I/O privilege setting is
+saved and restored properly when you subsequently switch from one environment to
+another? Why?
+
+No, because the eflags are already saved/restored when environments are switched
+and this privilege setting is simply another flag
+
+--------------------------------------------------------------------------------
+                            CHALLENGE IMPLEMENTATION
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
