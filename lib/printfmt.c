@@ -215,7 +215,7 @@ process_precision:
     // (unsigned) octal
     case 'o':
       // Replace this with your code.
-      num = getint(&ap, lflag);
+      num = getuint(&ap, lflag);
       base = 8;
       goto number;
 

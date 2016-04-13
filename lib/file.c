@@ -149,7 +149,11 @@ devfile_write(struct Fd *fd, const void *buf, size_t n)
   memmove(&fsipcbuf.write.req_buf, buf,
       MIN(PGSIZE-sizeof(int)+sizeof(size_t), n));
 
-  return fsipc(FSREQ_WRITE, NULL);
+  int bytes_written = fsipc(FSREQ_WRITE, NULL);
+  // Check assertions
+  assert(bytes_written <= n);
+  assert(bytes_written <= PGSIZE);
+  return bytes_written;
 }
 
 static int
