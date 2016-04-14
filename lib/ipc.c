@@ -67,7 +67,7 @@ ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
   int rc;
   while ((rc = sys_ipc_try_send(to_env, val, pg, perm)) != 0) {
     if (rc != -E_IPC_NOT_RECV) {
-      panic("Unexpected error in ipc_send");
+      panic("Unexpected error in ipc_send: %e", rc);
     }
     sys_yield();
   }

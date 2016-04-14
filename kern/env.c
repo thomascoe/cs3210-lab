@@ -443,7 +443,6 @@ void
 env_create(uint8_t *binary, enum EnvType type)
 {
   // LAB 3: Your code here.
-
   // Try to allocate the new environment
   struct Env *env;
   int rc = env_alloc(&env, 0);
@@ -456,6 +455,12 @@ env_create(uint8_t *binary, enum EnvType type)
 
   // Set the environment type
   env->env_type = type;
+
+  // If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
+  // LAB 5: Your code here.
+  if (type == ENV_TYPE_FS) {
+    env->env_tf.tf_eflags |= FL_IOPL_MASK;
+  }
 }
 
 //

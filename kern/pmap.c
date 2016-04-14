@@ -546,7 +546,7 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
   // Get the pagetable entry
   pte_t *pte = pgdir_walk(pgdir, va, false);
-  if (!pte) {
+  if (!pte || !(*pte & PTE_P)) {
     return NULL; // no page mapped at va
   }
 

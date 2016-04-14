@@ -79,27 +79,29 @@ duppage(envid_t envid, unsigned pn)
 
   // LAB 4: Your code here.
   void *addr = (void*)(pn*PGSIZE);
+  uint32_t perms;
 
-  uint32_t perms = PTE_U|PTE_P;
-  // Check if this page is writeable or COW
-  if(uvpt[pn] & (PTE_W|PTE_COW)) {
-    perms |= PTE_COW;
-  }
-
-  // Map this for the passed in envid
-  r = sys_page_map(0, addr, envid, addr, perms);
-  if (r < 0) {
-    panic("page_map COW envid in duppage()");
-  }
-
-  // If this is a COW page, remap for the current envid
-  if (perms & PTE_COW) {
+  if ((uvpt[pn] & PTE_COW) ||
+      (!(uvpt[pn] & PTE_SHARE) && (uvpt[pn] & PTE_W))) {
+    perms = ((uvpt[pn] & PTE_SYSCALL) & (~PTE_W)) | PTE_COW;
+    // Map for new envid
+    r = sys_page_map(0, addr, envid, addr, perms);
+    if (r < 0) {
+      panic("page_map in duppage(): %e", r);
+    }
+    // Map for current envid
     r = sys_page_map(0, addr, 0, addr, perms);
     if (r < 0) {
-      panic("page_map COW 0 in duppage()");
+      panic("page_map in duppage(): %e", r);
+    }
+  } else {
+    perms = uvpt[pn] & PTE_SYSCALL;
+    // Map for new envid
+    r = sys_page_map(0, addr, envid, addr, perms);
+    if (r < 0) {
+      panic("page_map in duppage(): %e", r);
     }
   }
-
   return 0;
 }
 
